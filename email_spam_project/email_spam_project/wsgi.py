@@ -14,3 +14,11 @@ from django.core.wsgi import get_wsgi_application
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'email_spam_project.settings')
 
 application = get_wsgi_application()
+
+try:
+	from .oauth_bootstrap import bootstrap_google_socialapp
+
+	bootstrap_google_socialapp()
+except Exception:
+	# Never prevent the app from starting due to bootstrap issues.
+	pass

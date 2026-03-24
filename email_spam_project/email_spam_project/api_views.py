@@ -57,8 +57,18 @@ def _get_google_token_for_user(user):
 
 @require_GET
 def me(request):
+    google_oauth_configured = bool(
+        getattr(settings, "GOOGLE_CLIENT_ID", None) and getattr(settings, "GOOGLE_CLIENT_SECRET", None)
+    )
+
     if not request.user.is_authenticated:
-        return JsonResponse({"authenticated": False}, status=200)
+        return JsonResponse(
+            {
+                "authenticated": False,
+                "google_oauth_configured": google_oauth_configured,
+            },
+            status=200,
+        )
 
     email = None
     account = SocialAccount.objects.filter(user=request.user, provider="google").order_by("-id").first()
@@ -68,6 +78,7 @@ def me(request):
     return JsonResponse(
         {
             "authenticated": True,
+            "google_oauth_configured": google_oauth_configured,
             "username": request.user.get_username(),
             "email": email or getattr(request.user, "email", None),
         },

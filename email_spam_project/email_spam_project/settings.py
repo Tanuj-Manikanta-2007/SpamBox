@@ -162,8 +162,25 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # - Add redirect URI: https://<your-domain>/accounts/google/login/callback/
 # - For Render, set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET as env vars
 
-GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
-GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
+
+def _getenv_first(*names: str) -> str | None:
+    for name in names:
+        value = os.environ.get(name)
+        if value:
+            return value
+    return None
+
+
+GOOGLE_CLIENT_ID = _getenv_first(
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_OAUTH_CLIENT_ID",
+    "DJANGO_GOOGLE_CLIENT_ID",
+)
+GOOGLE_CLIENT_SECRET = _getenv_first(
+    "GOOGLE_CLIENT_SECRET",
+    "GOOGLE_OAUTH_CLIENT_SECRET",
+    "DJANGO_GOOGLE_CLIENT_SECRET",
+)
 
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
@@ -187,3 +204,16 @@ if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
         "secret": GOOGLE_CLIENT_SECRET,
         "key": "",
     }
+
+    # Some allauth versions/configs expect a list under `APPS`.
+    SOCIALACCOUNT_PROVIDERS["google"]["APPS"] = [
+        {
+            "client_id": GOOGLE_CLIENT_ID,
+            "secret": GOOGLE_CLIENT_SECRET,
+            "key": "",
+        }
+    ]
+
+
+# Ensure tokens are persisted for Gmail access.
+SOCIALACCOUNT_STORE_TOKENS = True
