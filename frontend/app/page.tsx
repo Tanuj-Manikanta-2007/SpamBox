@@ -296,8 +296,9 @@ function ResponsePage({ onBack }: { onBack: () => void }) {
 
 /* ---------------- DASHBOARD ---------------- */
 function Dashboard() {
-  const [selectedEmail, setSelectedEmail] = useState<{ sender: string; subject: string; preview: string; time: string } | null>(null);
-  const [emails, setEmails] = useState<{ sender: string; subject: string; preview: string; time: string }[]>([]);
+  const [selectedEmail, setSelectedEmail] = useState<{ id?: string; sender: string; subject: string; preview: string; time: string } | null>(null);
+  const [emails, setEmails] = useState<{ id?: string; sender: string; subject: string; preview: string; time: string }[]>([]);
+  const [spamById, setSpamById] = useState<Record<string, { prediction: string; confidence: number }>>({});
   const [spamData, setSpamData] = useState<{
     prediction: string;
     confidence: number;
@@ -305,13 +306,14 @@ function Dashboard() {
     ham_probability?: number;
   } | null>(null);
   const [summary, setSummary] = useState<string>("");
+  const [reply, setReply] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadInbox = async () => {
       try {
-        const resp = await fetch("/api/gmail/inbox");
+        const resp = await fetch("/api/gmail/inbox?limit=15");
         const data = await resp.json().catch(() => null);
         if (!resp.ok) {
           setError(data?.error || "Failed to load inbox");
@@ -319,6 +321,35 @@ function Dashboard() {
         }
         const list = Array.isArray(data?.emails) ? data.emails : [];
         setEmails(list);
+
+        // Kick off spam classification for each email (best-effort).
+        // This is intentionally simple: 10-15 requests is fine for this demo.
+        const updates: Record<string, { prediction: string; confidence: number }> = {};
+        await Promise.all(
+          list.map(async (email: any) => {
+            const emailId = String(email?.id || "");
+            if (!emailId) return;
+            try {
+              const text = `${email?.subject ?? ""}\n\n${email?.preview ?? ""}`.trim();
+              if (!text) return;
+              const predictResp = await fetch("/api/predict", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text }),
+              });
+              const predictData = await predictResp.json().catch(() => null);
+              if (!predictResp.ok) return;
+              updates[emailId] = {
+                prediction: String(predictData?.prediction ?? ""),
+                confidence: Number(predictData?.confidence ?? 0),
+              };
+            } catch {
+              // ignore per-email failures
+            }
+          })
+        );
+
+        setSpamById((prev) => ({ ...prev, ...updates }));
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : String(e));
       }
@@ -336,30 +367,19 @@ function Dashboard() {
       setError(null);
       setSpamData(null);
       setSummary("");
+      setReply("");
 
       try {
-        const [predictResp, summaryResp] = await Promise.all([
-          fetch("/api/predict", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: input }),
-          }),
-          fetch("/api/summary", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: input }),
-          }),
-        ]);
+        const predictResp = await fetch("/api/predict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: input }),
+        });
 
         const predictData = await predictResp.json().catch(() => null);
-        const summaryData = await summaryResp.json().catch(() => null);
 
         if (!predictResp.ok) {
           setError(predictData?.error || "Failed to analyze spam");
-          return;
-        }
-        if (!summaryResp.ok) {
-          setError(summaryData?.error || "Failed to summarize");
           return;
         }
 
@@ -369,7 +389,14 @@ function Dashboard() {
           spam_probability: predictData?.spam_probability,
           ham_probability: predictData?.ham_probability,
         });
-        setSummary(String(summaryData?.text ?? summaryData?.summary ?? ""));
+
+        const emailId = String((selectedEmail as any).id || "");
+        if (emailId) {
+          setSpamById((prev) => ({
+            ...prev,
+            [emailId]: { prediction: String(predictData?.prediction ?? ""), confidence: Number(predictData?.confidence ?? 0) },
+          }));
+        }
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -401,7 +428,25 @@ function Dashboard() {
             className="p-4 border-b border-gray-800 cursor-pointer hover:bg-white/5"
           >
             <div className="flex justify-between">
-              <span>{email.sender}</span>
+              <div className="flex items-center gap-2">
+                {email.id && spamById[email.id] ? (
+                  <span
+                    className={`inline-flex items-center justify-center w-5 h-5 rounded border text-xs font-bold ${
+                      String(spamById[email.id]?.prediction || "").toLowerCase().includes("spam")
+                        ? "border-red-500/60 text-red-300"
+                        : "border-green-500/60 text-green-300"
+                    }`}
+                    title={`Prediction: ${spamById[email.id]?.prediction} (confidence ${spamById[email.id]?.confidence})`}
+                  >
+                    {String(spamById[email.id]?.prediction || "").toLowerCase().includes("spam") ? "✗" : "✓"}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded border border-gray-700 text-gray-500 text-xs" title="Not analyzed yet">
+                    …
+                  </span>
+                )}
+                <span>{email.sender}</span>
+              </div>
               <span className="text-xs text-gray-500">{email.time}</span>
             </div>
             <div className="text-sm">{email.subject}</div>
@@ -417,6 +462,68 @@ function Dashboard() {
           </div>
         ) : (
           <div className="space-y-4">
+            <div className="flex gap-3">
+              <button
+                onClick={async () => {
+                  const input = `${selectedEmail.subject}\n\n${selectedEmail.preview}`.trim();
+                  if (!input) return;
+                  setLoading(true);
+                  setError(null);
+                  setSummary("");
+                  try {
+                    const resp = await fetch("/api/summary", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ text: input }),
+                    });
+                    const data = await resp.json().catch(() => null);
+                    if (!resp.ok) {
+                      setError(data?.error || "Failed to summarize");
+                      return;
+                    }
+                    setSummary(String(data?.text ?? data?.summary ?? ""));
+                  } catch (e: unknown) {
+                    setError(e instanceof Error ? e.message : String(e));
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="px-4 py-2 rounded-lg border border-[#C6A062]/40 text-[#C6A062] hover:bg-white/5"
+              >
+                Get Summary
+              </button>
+
+              <button
+                onClick={async () => {
+                  const input = `${selectedEmail.subject}\n\n${selectedEmail.preview}`.trim();
+                  if (!input) return;
+                  setLoading(true);
+                  setError(null);
+                  setReply("");
+                  try {
+                    const resp = await fetch("/api/ai-response", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ text: input }),
+                    });
+                    const data = await resp.json().catch(() => null);
+                    if (!resp.ok) {
+                      setError(data?.error || "Failed to generate response");
+                      return;
+                    }
+                    setReply(String(data?.text ?? data?.ai_response ?? data?.reply ?? ""));
+                  } catch (e: unknown) {
+                    setError(e instanceof Error ? e.message : String(e));
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="px-4 py-2 rounded-lg border border-[#C6A062]/40 text-[#C6A062] hover:bg-white/5"
+              >
+                AI Response
+              </button>
+            </div>
+
             {loading && (
               <div className="p-4 rounded-xl border border-gray-800 bg-black/60 text-gray-400">
                 Loading analysis...
@@ -451,6 +558,13 @@ function Dashboard() {
               <h3 className="text-[#C6A062] font-bold mb-2">AI SUMMARY</h3>
               <p className="text-sm text-gray-400 whitespace-pre-wrap min-h-20">
                 {summary || "—"}
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl border border-[#C6A062]/30 bg-black/60">
+              <h3 className="text-[#C6A062] font-bold mb-2">AI RESPONSE</h3>
+              <p className="text-sm text-gray-400 whitespace-pre-wrap min-h-20">
+                {reply || "—"}
               </p>
             </div>
           </div>

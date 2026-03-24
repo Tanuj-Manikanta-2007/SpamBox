@@ -120,7 +120,14 @@ def gmail_inbox(request):
 
     try:
         service = build("gmail", "v1", credentials=creds, cache_discovery=False)
-        listing = service.users().messages().list(userId="me", maxResults=10, q="in:inbox").execute()
+
+        try:
+            limit = int(request.GET.get("limit", "15"))
+        except ValueError:
+            limit = 15
+        limit = max(1, min(limit, 25))
+
+        listing = service.users().messages().list(userId="me", maxResults=limit, q="in:inbox").execute()
         message_ids = [m.get("id") for m in listing.get("messages", []) if m.get("id")]
 
         emails = []
