@@ -39,7 +39,10 @@ function GmailCard({ onClose, onSuccess }: { onClose: () => void; onSuccess: () 
         <h2 className="text-3xl text-[#C6A062] mb-6">CONNECT GMAIL</h2>
 
         <button
-          onClick={onSuccess}
+          onClick={() => {
+            // Hand off to Django allauth Google login
+            window.location.href = "/accounts/google/login/?process=login";
+          }}
           className="w-full flex items-center justify-center gap-3 py-4 bg-white text-black rounded-xl font-semibold hover:scale-105 transition"
         >
              <span className="w-5 h-5 grid place-items-center rounded bg-gray-600 text-white text-xs font-bold">
@@ -294,6 +297,7 @@ function ResponsePage({ onBack }: { onBack: () => void }) {
 /* ---------------- DASHBOARD ---------------- */
 function Dashboard() {
   const [selectedEmail, setSelectedEmail] = useState<{ sender: string; subject: string; preview: string; time: string } | null>(null);
+  const [emails, setEmails] = useState<{ sender: string; subject: string; preview: string; time: string }[]>([]);
   const [spamData, setSpamData] = useState<{
     prediction: string;
     confidence: number;
@@ -304,11 +308,24 @@ function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const emails = [
-    { sender: "Google", subject: "Security alert", preview: "New device login...", time: "17:43" },
-    { sender: "GitHub", subject: "New sign-in", preview: "We noticed a login...", time: "16:25" },
-    { sender: "Vercel", subject: "Deploy success", preview: "Your app is live...", time: "14:08" },
-  ];
+  useEffect(() => {
+    const loadInbox = async () => {
+      try {
+        const resp = await fetch("/api/gmail/inbox");
+        const data = await resp.json().catch(() => null);
+        if (!resp.ok) {
+          setError(data?.error || "Failed to load inbox");
+          return;
+        }
+        const list = Array.isArray(data?.emails) ? data.emails : [];
+        setEmails(list);
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    };
+
+    loadInbox();
+  }, []);
 
   useEffect(() => {
     const run = async () => {
@@ -450,6 +467,19 @@ export default function App() {
   const [showOAuth, setShowOAuth] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   const [page, setPage] = useState("home");
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const resp = await fetch("/api/me");
+        const data = await resp.json().catch(() => null);
+        setLoggedIn(Boolean(data?.authenticated));
+      } catch {
+        setLoggedIn(false);
+      }
+    };
+    checkAuth();
+  }, []);
 
   if (loggedIn) return <Dashboard />;
 

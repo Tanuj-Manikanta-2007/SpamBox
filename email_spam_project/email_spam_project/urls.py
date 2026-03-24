@@ -22,6 +22,8 @@ from . import api_views, frontend_views
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('allauth.urls')),
+    path("api/me", api_views.me),
+    path("api/gmail/inbox", api_views.gmail_inbox),
     path("api/predict", api_views.predict),
     path("api/summary", api_views.summary),
     path("api/ai-response", api_views.ai_response),

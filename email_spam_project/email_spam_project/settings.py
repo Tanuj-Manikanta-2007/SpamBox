@@ -49,6 +49,9 @@ INSTALLED_APPS = [
 ]
 SITE_ID = 1
 
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/"
+
 AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',
     'allauth.account.auth_backends.AuthenticationBackend',
@@ -151,3 +154,36 @@ SPAM_API_URL = 'https://spam-mail-api-l6cq.onrender.com/predict'
 # AI_RESPONSE_API_URL = 'https://spam-mail-api-l6cq.onrender.com/ai-response'
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+# --- Google OAuth (django-allauth) ---
+# IMPORTANT:
+# - Configure Google OAuth client on Google Cloud Console
+# - Add redirect URI: https://<your-domain>/accounts/google/login/callback/
+# - For Render, set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET as env vars
+
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
+
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "SCOPE": [
+            "profile",
+            "email",
+            "https://www.googleapis.com/auth/gmail.readonly",
+        ],
+        "AUTH_PARAMS": {
+            # Needed to receive a refresh token (so Gmail access keeps working)
+            "access_type": "offline",
+            "prompt": "consent",
+        },
+    }
+}
+
+if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
+    # Allows using env vars without creating a SocialApp row in the DB.
+    SOCIALACCOUNT_PROVIDERS["google"]["APP"] = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "secret": GOOGLE_CLIENT_SECRET,
+        "key": "",
+    }

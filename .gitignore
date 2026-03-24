@@ -33,3 +33,7 @@ Thumbs.db
 
 # Misc
 .python-version
+
+# OAuth client secrets (never commit)
+client_secret*.json
+credentials*.json
