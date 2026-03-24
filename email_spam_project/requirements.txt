@@ -1,0 +1,15 @@
+# Dependencies for the SpamBox Django UI (email_automater/email_spam_project)
+Django>=5.0
+
+django-allauth>=0.60
+
+# Production WSGI server (Render start command typically uses gunicorn)
+gunicorn>=21.2
+
+# Optional: static file serving (enable middleware/settings if you use it)
+whitenoise>=6.6
+
+# Optional: Gmail integration utilities used by email_automater/gmail_service.py
+google-api-python-client>=2.0
+google-auth>=2.0
+google-auth-oauthlib>=1.0
