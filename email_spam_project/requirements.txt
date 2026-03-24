@@ -3,6 +3,9 @@ Django>=5.0
 
 django-allauth>=0.60
 
+# django-allauth (Google provider) depends on PyJWT (imported as `jwt`)
+PyJWT>=2.8
+
 # Servers
 uvicorn>=0.24
 gunicorn>=21.2
