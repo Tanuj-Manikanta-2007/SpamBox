@@ -9,7 +9,7 @@ function MailIntro({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     const t = setTimeout(() => onDone(), 2200);
     return () => clearTimeout(t);
-  }, []);
+  }, [onDone]);
 
   return (
     <div className="absolute inset-0 flex items-center justify-center z-40 bg-[#0A0A0A]">
@@ -42,10 +42,9 @@ function GmailCard({ onClose, onSuccess }: { onClose: () => void; onSuccess: () 
           onClick={onSuccess}
           className="w-full flex items-center justify-center gap-3 py-4 bg-white text-black rounded-xl font-semibold hover:scale-105 transition"
         >
-          <img
-            src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-            className="w-5 h-5"
-          />
+             <span className="w-5 h-5 grid place-items-center rounded bg-gray-600 text-white text-xs font-bold">
+               G
+             </span>
           Continue with Google
         </button>
 
@@ -58,24 +57,49 @@ function GmailCard({ onClose, onSuccess }: { onClose: () => void; onSuccess: () 
 }
 
 /* ---------------- SPAM CHECK ---------------- */
-function SpamChecker({ onBack, onLimit }: { onBack: () => void; onLimit: () => void }) {
+function SpamChecker({ onBack }: { onBack: () => void }) {
   const [text, setText] = useState("");
-  const [result, setResult] = useState<{ prediction: string; confidence: number } | null>(null);
+  const [result, setResult] = useState<{
+    prediction: string;
+    confidence: number;
+    spam_probability?: number;
+    ham_probability?: number;
+  } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleCheck = () => {
-    const used = localStorage.getItem("trial_used");
+  const handleCheck = async () => {
+    const input = text.trim();
+    if (!input) return;
 
-    if (used) {
-      onLimit();
-      return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const resp = await fetch("/api/predict", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: input }),
+      });
+
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok) {
+        setError(data?.error || "Failed to check spam");
+        return;
+      }
+
+      setResult({
+        prediction: data?.prediction ?? "",
+        confidence: Number(data?.confidence ?? 0),
+        spam_probability: data?.spam_probability,
+        ham_probability: data?.ham_probability,
+      });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
     }
-
-    localStorage.setItem("trial_used", "true");
-
-    setResult({
-      prediction: "Spam",
-      confidence: 0.72,
-    });
   };
 
   return (
@@ -93,15 +117,28 @@ function SpamChecker({ onBack, onLimit }: { onBack: () => void; onLimit: () => v
 
       <button
         onClick={handleCheck}
-        className="mt-4 px-6 py-3 bg-[#C6A062] text-black rounded-lg"
+        disabled={loading}
+        className="mt-4 px-6 py-3 bg-[#C6A062] text-black rounded-lg disabled:opacity-60"
       >
-        Check
+        {loading ? "Checking..." : "Check"}
       </button>
+
+      {error && (
+        <div className="mt-4 p-4 border border-red-500/40 rounded bg-black text-red-200">
+          {error}
+        </div>
+      )}
 
       {result && (
         <div className="mt-6 p-4 border border-gray-800 rounded bg-black">
           <p>Prediction: {result.prediction}</p>
           <p>Confidence: {result.confidence}</p>
+          {typeof result.spam_probability === "number" && (
+            <p>Spam probability: {result.spam_probability}</p>
+          )}
+          {typeof result.ham_probability === "number" && (
+            <p>Ham probability: {result.ham_probability}</p>
+          )}
         </div>
       )}
     </div>
@@ -112,11 +149,36 @@ function SpamChecker({ onBack, onLimit }: { onBack: () => void; onLimit: () => v
 function SummaryPage({ onBack }: { onBack: () => void }) {
   const [text, setText] = useState("");
   const [summary, setSummary] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleGenerate = () => {
-    if (!text) return;
-    const short = text.split(" ").slice(0, 20).join(" ") + "...";
-    setSummary(short);
+  const handleGenerate = async () => {
+    const input = text.trim();
+    if (!input) return;
+
+    setLoading(true);
+    setError(null);
+    setSummary("");
+
+    try {
+      const resp = await fetch("/api/summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: input }),
+      });
+
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok) {
+        setError(data?.error || "Failed to generate summary");
+        return;
+      }
+
+      setSummary(String(data?.text ?? data?.summary ?? ""));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -134,15 +196,95 @@ function SummaryPage({ onBack }: { onBack: () => void }) {
 
       <button
         onClick={handleGenerate}
-        className="mt-4 px-6 py-3 bg-[#C6A062] text-black rounded-lg"
+        disabled={loading}
+        className="mt-4 px-6 py-3 bg-[#C6A062] text-black rounded-lg disabled:opacity-60"
       >
-        Generate Summary
+        {loading ? "Generating..." : "Generate Summary"}
       </button>
+
+      {error && (
+        <div className="mt-4 p-4 border border-red-500/40 rounded bg-black text-red-200">
+          {error}
+        </div>
+      )}
 
       {summary && (
         <div className="mt-6 p-4 border border-gray-800 rounded bg-black">
           <h3 className="text-[#C6A062] mb-2">Summary:</h3>
-          <p className="text-gray-300">{summary}</p>
+          <p className="text-gray-300 whitespace-pre-wrap min-h-40">{summary}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- AI RESPONSE ---------------- */
+function ResponsePage({ onBack }: { onBack: () => void }) {
+  const [text, setText] = useState("");
+  const [reply, setReply] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleGenerate = async () => {
+    const input = text.trim();
+    if (!input) return;
+
+    setLoading(true);
+    setError(null);
+    setReply("");
+
+    try {
+      const resp = await fetch("/api/ai-response", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: input }),
+      });
+
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok) {
+        setError(data?.error || "Failed to generate response");
+        return;
+      }
+
+      setReply(String(data?.text ?? data?.ai_response ?? data?.reply ?? ""));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#0b0b0b] text-gray-200 p-10">
+      <button onClick={onBack} className="mb-6 text-gray-400">← Back</button>
+
+      <h1 className="text-3xl text-[#C6A062] mb-6">AI Email Response</h1>
+
+      <textarea
+        className="w-full h-40 p-4 bg-black border border-gray-800 rounded-lg"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Paste email content..."
+      />
+
+      <button
+        onClick={handleGenerate}
+        disabled={loading}
+        className="mt-4 px-6 py-3 bg-[#C6A062] text-black rounded-lg disabled:opacity-60"
+      >
+        {loading ? "Generating..." : "Generate Response"}
+      </button>
+
+      {error && (
+        <div className="mt-4 p-4 border border-red-500/40 rounded bg-black text-red-200">
+          {error}
+        </div>
+      )}
+
+      {reply && (
+        <div className="mt-6 p-4 border border-gray-800 rounded bg-black">
+          <h3 className="text-[#C6A062] mb-2">Response:</h3>
+          <p className="text-gray-300 whitespace-pre-wrap min-h-40">{reply}</p>
         </div>
       )}
     </div>
@@ -152,12 +294,74 @@ function SummaryPage({ onBack }: { onBack: () => void }) {
 /* ---------------- DASHBOARD ---------------- */
 function Dashboard() {
   const [selectedEmail, setSelectedEmail] = useState<{ sender: string; subject: string; preview: string; time: string } | null>(null);
+  const [spamData, setSpamData] = useState<{
+    prediction: string;
+    confidence: number;
+    spam_probability?: number;
+    ham_probability?: number;
+  } | null>(null);
+  const [summary, setSummary] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const emails = [
     { sender: "Google", subject: "Security alert", preview: "New device login...", time: "17:43" },
     { sender: "GitHub", subject: "New sign-in", preview: "We noticed a login...", time: "16:25" },
     { sender: "Vercel", subject: "Deploy success", preview: "Your app is live...", time: "14:08" },
   ];
+
+  useEffect(() => {
+    const run = async () => {
+      if (!selectedEmail) return;
+
+      const input = `${selectedEmail.subject}\n\n${selectedEmail.preview}`;
+      setLoading(true);
+      setError(null);
+      setSpamData(null);
+      setSummary("");
+
+      try {
+        const [predictResp, summaryResp] = await Promise.all([
+          fetch("/api/predict", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: input }),
+          }),
+          fetch("/api/summary", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: input }),
+          }),
+        ]);
+
+        const predictData = await predictResp.json().catch(() => null);
+        const summaryData = await summaryResp.json().catch(() => null);
+
+        if (!predictResp.ok) {
+          setError(predictData?.error || "Failed to analyze spam");
+          return;
+        }
+        if (!summaryResp.ok) {
+          setError(summaryData?.error || "Failed to summarize");
+          return;
+        }
+
+        setSpamData({
+          prediction: predictData?.prediction ?? "",
+          confidence: Number(predictData?.confidence ?? 0),
+          spam_probability: predictData?.spam_probability,
+          ham_probability: predictData?.ham_probability,
+        });
+        setSummary(String(summaryData?.text ?? summaryData?.summary ?? ""));
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    run();
+  }, [selectedEmail]);
 
   return (
     <div className="h-screen flex bg-[#0b0b0b] text-gray-200">
@@ -196,14 +400,41 @@ function Dashboard() {
           </div>
         ) : (
           <div className="space-y-4">
+            {loading && (
+              <div className="p-4 rounded-xl border border-gray-800 bg-black/60 text-gray-400">
+                Loading analysis...
+              </div>
+            )}
+
+            {error && (
+              <div className="p-4 rounded-xl border border-red-500/40 bg-black/60 text-red-200">
+                {error}
+              </div>
+            )}
+
             <div className="p-4 rounded-xl border border-[#C6A062]/30 bg-black/60">
               <h3 className="text-[#C6A062] font-bold mb-2">SPAM TOKEN</h3>
-              <p className="text-sm text-gray-400">Spam probability: 0.72</p>
+              {!spamData ? (
+                <p className="text-sm text-gray-400">—</p>
+              ) : (
+                <div className="text-sm text-gray-400 space-y-1">
+                  <p>Prediction: {spamData.prediction}</p>
+                  <p>Confidence: {spamData.confidence}</p>
+                  {typeof spamData.spam_probability === "number" && (
+                    <p>Spam probability: {spamData.spam_probability}</p>
+                  )}
+                  {typeof spamData.ham_probability === "number" && (
+                    <p>Ham probability: {spamData.ham_probability}</p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="p-4 rounded-xl border border-[#C6A062]/30 bg-black/60">
               <h3 className="text-[#C6A062] font-bold mb-2">AI SUMMARY</h3>
-              <p className="text-sm text-gray-400">Summary will appear here</p>
+              <p className="text-sm text-gray-400 whitespace-pre-wrap min-h-20">
+                {summary || "—"}
+              </p>
             </div>
           </div>
         )}
@@ -223,11 +454,15 @@ export default function App() {
   if (loggedIn) return <Dashboard />;
 
   if (page === "spam") {
-    return <SpamChecker onBack={() => setPage("home")} onLimit={() => setShowOAuth(true)} />;
+    return <SpamChecker onBack={() => setPage("home")} />;
   }
 
   if (page === "summary") {
     return <SummaryPage onBack={() => setPage("home")} />;
+  }
+
+  if (page === "response") {
+    return <ResponsePage onBack={() => setPage("home")} />;
   }
 
   return (
@@ -247,7 +482,8 @@ export default function App() {
             {/* GLOW BUTTONS */}
             {[
               { name: "SPAM DETECTION", action: () => setPage("spam") },
-              { name: "AI SUMMARY", action: () => setPage("summary") }
+              { name: "AI SUMMARY", action: () => setPage("summary") },
+              { name: "AI RESPONSE", action: () => setPage("response") },
             ].map((item, i) => (
               <div
                 key={i}
