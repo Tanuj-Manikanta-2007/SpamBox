@@ -55,44 +55,44 @@ def bootstrap_google_socialapp() -> bool:
             site.name = render_hostname
             site.save(update_fields=["domain", "name"])
 
-        try:
-            app, created = SocialApp.objects.get_or_create(
+        apps = list(SocialApp.objects.filter(provider="google").order_by("id"))
+        if not apps:
+            app = SocialApp.objects.create(
                 provider="google",
                 name="Google",
-                defaults={
-                    "client_id": client_id,
-                    "secret": client_secret,
-                    "key": "",
-                },
+                client_id=client_id,
+                secret=client_secret,
+                key="",
             )
-        except SocialApp.MultipleObjectsReturned:
-            app = SocialApp.objects.filter(provider="google").order_by("id").first()
-            created = False
+            apps = [app]
 
-        if not app:
-            return False
+        primary = apps[0]
 
         changed = False
-        if app.client_id != client_id:
-            app.client_id = client_id
+        if primary.client_id != client_id:
+            primary.client_id = client_id
             changed = True
-        if app.secret != client_secret:
-            app.secret = client_secret
+        if primary.secret != client_secret:
+            primary.secret = client_secret
             changed = True
-        if app.key != "":
-            app.key = ""
+        if primary.key != "":
+            primary.key = ""
             changed = True
-        if app.name != "Google":
-            app.name = "Google"
+        if primary.name != "Google":
+            primary.name = "Google"
             changed = True
-        if app.provider != "google":
-            app.provider = "google"
+        if primary.provider != "google":
+            primary.provider = "google"
             changed = True
+        if changed:
+            primary.save()
 
-        if changed and not created:
-            app.save()
+        # Ensure the site is linked to exactly one google app to avoid
+        # allauth.adapter.get_app() raising MultipleObjectsReturned.
+        primary.sites.add(site)
+        for extra in apps[1:]:
+            extra.sites.remove(site)
 
-        app.sites.add(site)
         return True
     except (OperationalError, ProgrammingError):
         # Database not ready (migrations not applied yet) — don't crash the server.
