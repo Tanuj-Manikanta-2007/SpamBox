@@ -13,11 +13,6 @@ python-dotenv
 
 # Django UI (optional)
 Django>=5.0
-django-allauth>=0.60
-gunicorn>=21.2
-whitenoise>=6.6
-
-# Google API (Gmail integration)
-google-api-python-client>=2.0
-google-auth>=2.0
-google-auth-oauthlib>=1.0
+## Render build step expects requirements.txt at the service root.
+## This repo is a Django project under ./email_spam_project.
+-r email_spam_project/requirements.txt

@@ -15,12 +15,21 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
+
+from . import api_views, frontend_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('allauth.urls')),
-    path('', include('ai_ui.urls')),
-    path('spam/', include('spam_ui.urls')),
-    
+    path("api/predict", api_views.predict),
+    path("api/summary", api_views.summary),
+    path("api/ai-response", api_views.ai_response),
+
+    # Legacy server-rendered Django pages (kept for reference)
+    path("legacy/spam/", include("spam_ui.urls")),
+    path("legacy/", include("ai_ui.urls")),
+
+    # Frontend (static-exported Next.js) - catch-all
+    re_path(r"^(?!static/|api/|admin/|accounts/|legacy/).*$", frontend_views.index),
 ]
