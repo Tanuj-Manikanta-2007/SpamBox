@@ -42,6 +42,8 @@ INSTALLED_APPS = [
     'allauth.account',
     'allauth.socialaccount',
     'allauth.socialaccount.providers.google',
+    'spam_ui',
+    'ai_ui',
 ]
 SITE_ID = 1
 
@@ -126,3 +128,11 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+# External API used by the spam-check UI
+SPAM_API_URL = 'https://spam-mail-api-l6cq.onrender.com/predict'
+
+# Optional overrides for AI summary/response endpoints (defaults derived from SPAM_API_URL)
+# AI_API_BASE_URL = 'https://spam-mail-api-l6cq.onrender.com/'
+# SUMMARY_API_URL = 'https://spam-mail-api-l6cq.onrender.com/summary'
+# AI_RESPONSE_API_URL = 'https://spam-mail-api-l6cq.onrender.com/ai-response'

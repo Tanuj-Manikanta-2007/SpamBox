@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Response</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: #101a2e;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --border: rgba(255,255,255,0.10);
+      --btn: #2563eb;
+      --btn-hover: #1d4ed8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(1200px 800px at 10% 10%, rgba(37,99,235,0.25), transparent 60%),
+                  radial-gradient(900px 700px at 90% 20%, rgba(34,197,94,0.18), transparent 55%),
+                  var(--bg);
+      color: var(--text);
+    }
+    .container { max-width: 980px; margin: 0 auto; padding: 28px 16px 56px; }
+    .header { display:flex; justify-content:space-between; align-items:flex-start; gap: 12px; margin-bottom: 14px; }
+    h1 { margin: 0; font-size: 26px; font-weight: 800; }
+    .sub { margin-top: 6px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+
+    .panel {
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+    }
+
+    .textarea {
+      width: 100%;
+      resize: vertical;
+      min-height: 240px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      outline: none;
+      background: rgba(15, 23, 42, 0.65);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .output {
+      white-space: pre-wrap;
+      margin: 0;
+      padding: 12px;
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: auto;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #e2e8f0;
+      min-height: 240px;
+      max-height: 520px;
+    }
+
+    .actions { display:flex; gap:10px; justify-content:flex-end; margin-top: 12px; }
+    .btn {
+      appearance: none;
+      border: 0;
+      background: var(--btn);
+      color: white;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-weight: 800;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn:hover { background: var(--btn-hover); }
+
+    pre { display: none; }
+
+    .error {
+      border: 1px solid rgba(239, 68, 68, 0.5);
+      background: rgba(239, 68, 68, 0.08);
+      color: #fecaca;
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 13px;
+      line-height: 1.5;
+      margin-bottom: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <h1>AI Response</h1>
+        <div class="sub">
+          API: <span style="color:#cbd5e1;">{{ api_url }}</span>
+        </div>
+      </div>
+      <div>
+        <a class="btn" href="/">Home</a>
+      </div>
+    </div>
+
+    {% if error_message %}
+      <div class="error">{{ error_message }}</div>
+    {% endif %}
+
+    <div class="panel">
+      <form method="post">
+        {% csrf_token %}
+        {{ form.text }}
+        <div class="actions">
+          <button class="btn" type="submit">Generate Response</button>
+        </div>
+      </form>
+    </div>
+
+    {% if result %}
+      <div class="panel" style="margin-top: 14px;">
+        <div style="font-weight:800; margin-bottom:10px;">Response</div>
+        <div class="output">{% if ai_text %}{{ ai_text }}{% else %}No response returned.{% endif %}</div>
+      </div>
+    {% endif %}
+  </div>
+</body>
+</html>
