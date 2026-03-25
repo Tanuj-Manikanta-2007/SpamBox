@@ -37,3 +37,5 @@ Thumbs.db
 # OAuth client secrets (never commit)
 client_secret*.json
 credentials*.json
+db.sqlite3
+*.sqlite3
