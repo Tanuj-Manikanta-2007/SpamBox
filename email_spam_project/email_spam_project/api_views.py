@@ -1,4 +1,6 @@
 import json
+import os
+import re
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
@@ -10,6 +12,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from allauth.socialaccount.models import SocialAccount, SocialToken
+from django.contrib.auth import logout as django_logout
 
 
 def _base_url_from_settings() -> str:
@@ -40,6 +43,41 @@ def _post_json(url: str, payload: dict) -> dict:
     return json.loads(body)
 
 
+def _looks_like_upstream_error_text(text: str | None) -> bool:
+    if not text:
+        return False
+    t = text.strip().lower()
+    return t.startswith("error:") or t.startswith("failed")
+
+
+def _gemini_api_key() -> str | None:
+    # Keep it env-based so it works on Render and locally.
+    return os.environ.get("GEMINI_API_KEY")
+
+
+def _gemini_model() -> str:
+    return os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+
+
+def _clean_one_line(text: str) -> str:
+    return re.sub(r"\s+", " ", (text or "").strip())
+
+
+def _maybe_generate_with_gemini(prompt: str) -> str | None:
+    api_key = _gemini_api_key()
+    if not api_key:
+        return None
+    try:
+        from google import genai
+    except Exception:
+        return None
+
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(model=_gemini_model(), contents=prompt)
+    text = getattr(response, "text", "") or ""
+    return _clean_one_line(text)
+
+
 def _error(message: str, status: int = 400):
     return JsonResponse({"error": message}, status=status)
 
@@ -53,6 +91,15 @@ def _get_google_token_for_user(user):
         .order_by("-id")
         .first()
     )
+
+
+@csrf_exempt
+@require_POST
+def logout(request):
+    # For a static-exported frontend, CSRF tokens are inconvenient.
+    # Logging out via CSRF is low-risk; this endpoint intentionally keeps it simple.
+    django_logout(request)
+    return JsonResponse({"ok": True}, status=200)
 
 
 @require_GET
@@ -210,19 +257,33 @@ def summary(request):
 
     try:
         result = _post_json(endpoint_url, {"text": text, "message": text})
+        if result.get("error"):
+            raise RuntimeError(str(result.get("error")))
+        if _looks_like_upstream_error_text(result.get("text")):
+            raise RuntimeError(str(result.get("text")))
         return JsonResponse(result, status=200)
     except HTTPError as e:
         try:
             body = e.read().decode("utf-8")
         except Exception:
             body = ""
-        return _error(f"Upstream API error ({e.code}). {body}".strip(), status=502)
+        upstream_error = f"Upstream API error ({e.code}). {body}".strip()
     except URLError as e:
-        return _error(f"Could not reach upstream API: {e.reason}", status=502)
+        upstream_error = f"Could not reach upstream API: {e.reason}"
     except json.JSONDecodeError:
-        return _error("Upstream API returned invalid JSON.", status=502)
+        upstream_error = "Upstream API returned invalid JSON."
     except Exception as e:
-        return _error(f"Unexpected error: {e}", status=502)
+        upstream_error = f"Unexpected error: {e}"
+
+    # Fallback: if upstream fails, optionally use Gemini locally.
+    gemini_text = _maybe_generate_with_gemini(
+        "Summarize the following text in 50 words or fewer. Return only the summary text.\n\n"
+        f"TEXT:\n{text}"
+    )
+    if gemini_text:
+        return JsonResponse({"text": gemini_text, "summary": gemini_text, "fallback": "gemini"}, status=200)
+
+    return _error(upstream_error, status=502)
 
 
 @csrf_exempt
@@ -238,16 +299,38 @@ def ai_response(request):
 
     try:
         result = _post_json(endpoint_url, {"text": text, "message": text})
+        if result.get("error"):
+            raise RuntimeError(str(result.get("error")))
+        if _looks_like_upstream_error_text(result.get("text")):
+            raise RuntimeError(str(result.get("text")))
         return JsonResponse(result, status=200)
     except HTTPError as e:
         try:
             body = e.read().decode("utf-8")
         except Exception:
             body = ""
-        return _error(f"Upstream API error ({e.code}). {body}".strip(), status=502)
+        upstream_error = f"Upstream API error ({e.code}). {body}".strip()
     except URLError as e:
-        return _error(f"Could not reach upstream API: {e.reason}", status=502)
+        upstream_error = f"Could not reach upstream API: {e.reason}"
     except json.JSONDecodeError:
-        return _error("Upstream API returned invalid JSON.", status=502)
+        upstream_error = "Upstream API returned invalid JSON."
     except Exception as e:
-        return _error(f"Unexpected error: {e}", status=502)
+        upstream_error = f"Unexpected error: {e}"
+
+    # Fallback: if upstream fails, optionally use Gemini locally.
+    gemini_text = _maybe_generate_with_gemini(
+        "Write a helpful reply to the following message. Return only the reply text.\n\n"
+        f"MESSAGE:\n{text}"
+    )
+    if gemini_text:
+        return JsonResponse(
+            {
+                "text": gemini_text,
+                "ai_response": gemini_text,
+                "reply": gemini_text,
+                "fallback": "gemini",
+            },
+            status=200,
+        )
+
+    return _error(upstream_error, status=502)

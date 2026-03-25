@@ -1,0 +1,93 @@
+{% load i18n %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block head_title %}{% trans "Account" %}{% endblock %}</title>
+    <style>
+      :root {
+        --bg: #0b0b0b;
+        --panel: rgba(0, 0, 0, 0.6);
+        --border: rgba(198, 160, 98, 0.35);
+        --gold: #c6a062;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+      }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+      .wrap {
+        width: 100%;
+        max-width: 520px;
+      }
+      .brand {
+        text-align: center;
+        font-weight: 800;
+        letter-spacing: 0.25em;
+        color: var(--gold);
+        margin-bottom: 20px;
+        font-size: 28px;
+      }
+      .card {
+        border-radius: 18px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        padding: 22px;
+        box-shadow: 0 0 20px rgba(198, 160, 98, 0.25);
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--gold);
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+      }
+      .btn:hover { background: rgba(255, 255, 255, 0.07); }
+      .muted { color: var(--muted); font-size: 14px; }
+      .mt { margin-top: 14px; }
+      .center { text-align: center; }
+      input, select {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 12px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(0,0,0,0.4);
+        color: var(--text);
+        outline: none;
+      }
+      label { display: block; margin: 12px 0 6px; color: var(--muted); font-size: 13px; }
+      .helptext { color: var(--muted); font-size: 12px; }
+      ul.errorlist { margin: 10px 0 0; padding-left: 18px; color: #fecaca; }
+      a { color: var(--gold); }
+    </style>
+    {% block extra_head %}{% endblock %}
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="brand">SPAMBOX</div>
+      <div class="card">
+        {# Intentionally do NOT render django.contrib.messages to avoid "Successfully signed in..." etc. #}
+        {% block content %}{% endblock %}
+      </div>
+      <div class="center muted mt">
+        <a href="/">Back to Home</a>
+      </div>
+    </div>
+  </body>
+</html>

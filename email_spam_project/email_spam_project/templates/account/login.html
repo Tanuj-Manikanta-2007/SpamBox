@@ -1,0 +1,13 @@
+{% extends "account/base.html" %}
+{% load i18n %}
+
+{% block head_title %}{% trans "Sign In" %}{% endblock %}
+
+{% block content %}
+  <h2 style="margin: 0 0 10px; color: var(--gold);">{% trans "Sign In" %}</h2>
+  <p class="muted" style="margin-top: 0;">
+    {% trans "Use Google Sign In from the app." %}
+  </p>
+
+  <a class="btn" href="/accounts/google/login/?process=login">{% trans "Continue with Google" %}</a>
+{% endblock %}

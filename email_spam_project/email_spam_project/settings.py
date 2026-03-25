@@ -6,6 +6,15 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Load local environment variables from `.env` (development convenience).
+# Safe in production: if python-dotenv isn't installed or `.env` is absent, this is a no-op.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(BASE_DIR / ".env")
+except Exception:
+    pass
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -46,6 +55,7 @@ INSTALLED_APPS = [
     'allauth.socialaccount.providers.google',
     'spam_ui',
     'ai_ui',
+    'email_spam_project.apps.EmailSpamProjectConfig',
 ]
 SITE_ID = 1
 
@@ -197,23 +207,19 @@ SOCIALACCOUNT_PROVIDERS = {
     }
 }
 
-if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
-    # Allows using env vars without creating a SocialApp row in the DB.
-    SOCIALACCOUNT_PROVIDERS["google"]["APP"] = {
-        "client_id": GOOGLE_CLIENT_ID,
-        "secret": GOOGLE_CLIENT_SECRET,
-        "key": "",
-    }
-
-    # Some allauth versions/configs expect a list under `APPS`.
-    SOCIALACCOUNT_PROVIDERS["google"]["APPS"] = [
-        {
-            "client_id": GOOGLE_CLIENT_ID,
-            "secret": GOOGLE_CLIENT_SECRET,
-            "key": "",
-        }
-    ]
+# NOTE: Do not set `SOCIALACCOUNT_PROVIDERS['google']['APP'/'APPS']` here.
+# allauth merges settings-backed apps with DB-backed SocialApp rows; having both
+# configured results in MultipleObjectsReturned. Instead, we rely on
+# `email_spam_project.oauth_bootstrap.bootstrap_google_socialapp()` to ensure a
+# single SocialApp exists in the database and is linked to Site(id=1).
 
 
 # Ensure tokens are persisted for Gmail access.
 SOCIALACCOUNT_STORE_TOKENS = True
+
+# Skip the intermediate "You are about to sign in... Continue" confirmation screen.
+# This makes /accounts/google/login/?process=login redirect straight to Google.
+SOCIALACCOUNT_LOGIN_ON_GET = True
+
+# Avoid extra signup prompts for new social users.
+SOCIALACCOUNT_AUTO_SIGNUP = True

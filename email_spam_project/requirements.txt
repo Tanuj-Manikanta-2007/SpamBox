@@ -13,6 +13,12 @@ gunicorn>=21.2
 # Optional: static file serving (enable middleware/settings if you use it)
 whitenoise>=6.6
 
+# Local dev convenience: load secrets from .env
+python-dotenv>=1.0
+
+# Optional: generate summary/AI response locally via Gemini
+google-genai>=0.4
+
 # Optional: Gmail integration utilities used by email_automater/gmail_service.py
 google-api-python-client>=2.0
 google-auth>=2.0

@@ -1,0 +1,28 @@
+{% extends "account/base.html" %}
+{% load i18n %}
+
+{% block head_title %}{% trans "Sign In" %}{% endblock %}
+
+{% block content %}
+  <h2 style="margin: 0 0 10px; color: var(--gold);">{% trans "Sign in with Google" %}</h2>
+  <p class="muted" style="margin-top: 0;">
+    {% trans "Redirecting you to Google for authentication." %}
+  </p>
+
+  {#
+    When SOCIALACCOUNT_LOGIN_ON_GET=True, most users never see this template.
+    If they do (edge cases), keep it clean and on-theme.
+  #}
+  <form method="post" action="">
+    {% csrf_token %}
+    <button class="btn" type="submit">{% trans "Continue" %}</button>
+  </form>
+
+  <script>
+    // Best-effort auto-continue to avoid extra clicks.
+    try {
+      const btn = document.querySelector('button[type="submit"]');
+      if (btn) btn.click();
+    } catch (e) {}
+  </script>
+{% endblock %}
