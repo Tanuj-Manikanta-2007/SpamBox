@@ -22,6 +22,10 @@ from . import api_views, frontend_views
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('allauth.urls')),
+    path('privacy', frontend_views.privacy),
+    path('privacy/', frontend_views.privacy),
+    path('terms', frontend_views.terms),
+    path('terms/', frontend_views.terms),
     # API endpoints (support both with and without trailing slashes)
     path("api/me", api_views.me),
     path("api/me/", api_views.me),
