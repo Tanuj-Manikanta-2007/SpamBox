@@ -198,6 +198,7 @@ SOCIALACCOUNT_PROVIDERS = {
             "profile",
             "email",
             "https://www.googleapis.com/auth/gmail.readonly",
+            "https://www.googleapis.com/auth/gmail.send",
         ],
         "AUTH_PARAMS": {
             # Needed to receive a refresh token (so Gmail access keeps working)

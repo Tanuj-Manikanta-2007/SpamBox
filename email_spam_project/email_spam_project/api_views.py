@@ -334,3 +334,80 @@ def ai_response(request):
         )
 
     return _error(upstream_error, status=502)
+
+
+@csrf_exempt
+@require_POST
+def send_email(request):
+    """Send an email via Gmail API using user's OAuth token."""
+    if not request.user.is_authenticated:
+        return _error("Not authenticated", status=401)
+
+    payload = _read_json_body(request)
+    to_email = (payload.get("to") or "").strip()
+    subject = (payload.get("subject") or "").strip()
+    body = (payload.get("body") or payload.get("text") or payload.get("message") or "").strip()
+
+    if not (to_email and subject and body):
+        return _error("Missing 'to', 'subject', or 'body'", status=400)
+
+    token = _get_google_token_for_user(request.user)
+    if not token:
+        return _error("Google account not connected", status=400)
+
+    try:
+        from google.auth.transport.requests import Request as GoogleRequest
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+        import base64
+        from email.mime.text import MIMEText
+    except Exception as e:
+        return _error(f"Google API libraries not installed: {e}", status=500)
+
+    client_id = getattr(settings, "GOOGLE_CLIENT_ID", None)
+    client_secret = getattr(settings, "GOOGLE_CLIENT_SECRET", None)
+    if not (client_id and client_secret) and getattr(token, "app", None):
+        client_id = token.app.client_id
+        client_secret = token.app.secret
+
+    if not (client_id and client_secret):
+        return _error("Missing GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET", status=500)
+
+    scopes = settings.SOCIALACCOUNT_PROVIDERS.get("google", {}).get("SCOPE", [])
+
+    creds = Credentials(
+        token=token.token,
+        refresh_token=token.token_secret or None,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=client_id,
+        client_secret=client_secret,
+        scopes=scopes,
+    )
+
+    # Refresh if needed
+    try:
+        if not creds.valid and creds.refresh_token:
+            creds.refresh(GoogleRequest())
+    except Exception as e:
+        return _error(f"Could not refresh Google token: {e}", status=401)
+
+    try:
+        service = build("gmail", "v1", credentials=creds, cache_discovery=False)
+
+        # Create MIME message
+        message = MIMEText(body, "plain")
+        message["to"] = to_email
+        message["subject"] = subject
+
+        # Encode and send
+        raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
+        send_message = {"raw": raw_message}
+
+        result = service.users().messages().send(userId="me", body=send_message).execute()
+
+        return JsonResponse(
+            {"message": "Email sent successfully", "messageId": result.get("id")},
+            status=200,
+        )
+    except Exception as e:
+        return _error(f"Gmail API error: {e}", status=502)

@@ -1,28 +1,17 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Terms of Service | SpamBox</title>
-<style>
-body{
-    font-family: Arial, Helvetica, sans-serif;
-    max-width:900px;
-    margin:auto;
-    padding:40px;
-    line-height:1.8;
-    color:#333;
-}
-h1,h2{
-    color:#1a73e8;
-}
-</style>
+<link rel="stylesheet" href="{% static 'css/spambox_theme.css' %}">
 </head>
 <body>
 
 <h1>Terms of Service</h1>
 
-<p><strong>Last Updated:</strong> July 2026</p>
+<p class="last-updated"><strong>Last Updated:</strong> July 2026</p>
 
 <p>
 Welcome to SpamBox. By accessing or using this application, you agree to these Terms of Service.
@@ -48,15 +37,24 @@ SpamBox requests read-only Gmail access only after receiving the user's explicit
 <li>Use the application only for lawful purposes.</li>
 <li>Do not attempt to misuse, disrupt, or interfere with the application's operation.</li>
 <li>You remain responsible for reviewing any AI-generated summaries or replies before using them.</li>
+<li>You are responsible for reviewing AI-generated replies before sending them via email.</li>
+<li>SpamBox sends emails only after you explicitly initiate and confirm the send action.</li>
+<li>You acknowledge that you are responsible for the content and consequences of all emails sent through SpamBox.</li>
 </ul>
 
-<h2>4. AI Features</h2>
+<h2>4. AI Features & Email Sending</h2>
 
 <p>
-SpamBox may use trusted third-party AI service providers to perform intelligent 
-email analysis, spam classification, email summarization, and AI-assisted 
-reply generation. AI-generated results are provided for convenience and 
+SpamBox may use trusted third-party AI service providers to perform intelligent
+email analysis, spam classification, email summarization, and AI-assisted
+reply generation. AI-generated results are provided for convenience and
 should be reviewed by the user before use.
+</p>
+
+<p>
+When sending AI-generated replies, SpamBox uses the Gmail API with your explicit
+authorization. You must review and approve the reply content before sending.
+SpamBox will not send any email without your explicit confirmation.
 </p>
 
 <h2>5. Privacy</h2>

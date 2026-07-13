@@ -298,6 +298,7 @@ function ResponsePage({ onBack }: { onBack: () => void }) {
 function Dashboard({ onBack, onLogout }: { onBack: () => void; onLogout: () => void }) {
   const [selectedEmail, setSelectedEmail] = useState<{ id?: string; sender: string; subject: string; preview: string; time: string } | null>(null);
   const [emails, setEmails] = useState<{ id?: string; sender: string; subject: string; preview: string; time: string }[]>([]);
+  const [filteredEmails, setFilteredEmails] = useState<{ id?: string; sender: string; subject: string; preview: string; time: string }[]>([]);
   const [spamById, setSpamById] = useState<Record<string, { prediction: string; confidence: number }>>({});
   const [spamData, setSpamData] = useState<{
     prediction: string;
@@ -308,9 +309,16 @@ function Dashboard({ onBack, onLogout }: { onBack: () => void; onLogout: () => v
   const [summary, setSummary] = useState<string>("");
   const [whySpam, setWhySpam] = useState<string>("");
   const [reply, setReply] = useState<string>("");
+  const [replyTone, setReplyTone] = useState<"formal" | "casual" | "professional">( "professional");
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [whyLoading, setWhyLoading] = useState(false);
+  const [replyLoading, setReplyLoading] = useState(false);
+  const [sendLoading, setSendLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isComposing, setIsComposing] = useState(false);
+  const [editableReply, setEditableReply] = useState("");
+  const [pageOffset, setPageOffset] = useState(0);
 
   const SPAM_THRESHOLD = 0.75;
 
@@ -322,52 +330,73 @@ function Dashboard({ onBack, onLogout }: { onBack: () => void; onLogout: () => v
       )
   );
 
+  // Filter emails based on search query
   useEffect(() => {
-    const loadInbox = async () => {
-      try {
-        const resp = await fetch("/api/gmail/inbox?limit=15");
-        const data = await resp.json().catch(() => null);
-        if (!resp.ok) {
-          setError(data?.error || "Failed to load inbox");
-          return;
-        }
-        const list = Array.isArray(data?.emails) ? data.emails : [];
-        setEmails(list);
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) {
+      setFilteredEmails(emails);
+    } else {
+      setFilteredEmails(
+        emails.filter(
+          (email) =>
+            email.sender.toLowerCase().includes(query) ||
+            email.subject.toLowerCase().includes(query) ||
+            email.preview.toLowerCase().includes(query)
+        )
+      );
+    }
+  }, [searchQuery, emails]);
 
-        // Kick off spam classification for each email (best-effort).
-        // This is intentionally simple: 10-15 requests is fine for this demo.
-        const updates: Record<string, { prediction: string; confidence: number }> = {};
-        await Promise.all(
-          list.map(async (email: any) => {
-            const emailId = String(email?.id || "");
-            if (!emailId) return;
-            try {
-              const text = `${email?.subject ?? ""}\n\n${email?.preview ?? ""}`.trim();
-              if (!text) return;
-              const predictResp = await fetch("/api/predict", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text }),
-              });
-              const predictData = await predictResp.json().catch(() => null);
-              if (!predictResp.ok) return;
-              updates[emailId] = {
-                prediction: String(predictData?.prediction ?? ""),
-                confidence: Number(predictData?.confidence ?? 0),
-              };
-            } catch {
-              // ignore per-email failures
-            }
-          })
-        );
-
-        setSpamById((prev) => ({ ...prev, ...updates }));
-      } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : String(e));
+  const loadInbox = async (offset = 0) => {
+    try {
+      const resp = await fetch(`/api/gmail/inbox?limit=15&offset=${offset}`);
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok) {
+        setError(data?.error || "Failed to load inbox");
+        return;
       }
-    };
+      const list = Array.isArray(data?.emails) ? data.emails : [];
+      
+      if (offset === 0) {
+        setEmails(list);
+      } else {
+        setEmails((prev) => [...prev, ...list]);
+      }
 
-    loadInbox();
+      // Kick off spam classification for each email
+      const updates: Record<string, { prediction: string; confidence: number }> = {};
+      await Promise.all(
+        list.map(async (email: any) => {
+          const emailId = String(email?.id || "");
+          if (!emailId || spamById[emailId]) return; // Skip if already analyzed
+          try {
+            const text = `${email?.subject ?? ""}\n\n${email?.preview ?? ""}`.trim();
+            if (!text) return;
+            const predictResp = await fetch("/api/predict", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text }),
+            });
+            const predictData = await predictResp.json().catch(() => null);
+            if (!predictResp.ok) return;
+            updates[emailId] = {
+              prediction: String(predictData?.prediction ?? ""),
+              confidence: Number(predictData?.confidence ?? 0),
+            };
+          } catch {
+            // ignore per-email failures
+          }
+        })
+      );
+
+      setSpamById((prev) => ({ ...prev, ...updates }));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  useEffect(() => {
+    loadInbox(pageOffset);
   }, []);
 
   useEffect(() => {
@@ -381,6 +410,8 @@ function Dashboard({ onBack, onLogout }: { onBack: () => void; onLogout: () => v
       setSummary("");
       setWhySpam("");
       setReply("");
+      setEditableReply("");
+      setIsComposing(false);
 
       try {
         const predictResp = await fetch("/api/predict", {
@@ -407,7 +438,6 @@ function Dashboard({ onBack, onLogout }: { onBack: () => void; onLogout: () => v
           (typeof predictData?.spam_probability === "number" && predictData.spam_probability >= SPAM_THRESHOLD) ||
           String(predictData?.prediction ?? "").toLowerCase().includes("spam");
 
-        // Only generate summary automatically for high-probability spam.
         if (highSpam) {
           try {
             const resp = await fetch("/api/summary", {
@@ -420,7 +450,7 @@ function Dashboard({ onBack, onLogout }: { onBack: () => void; onLogout: () => v
               setSummary(String(data?.text ?? data?.summary ?? ""));
             }
           } catch {
-            // ignore summary failures; spam classification is still useful
+            // ignore summary failures
           }
         }
 
@@ -481,27 +511,117 @@ function Dashboard({ onBack, onLogout }: { onBack: () => void; onLogout: () => v
     }
   };
 
+  const generateReply = async () => {
+    if (!selectedEmail) return;
+
+    const emailText = `${selectedEmail.subject}\n\n${selectedEmail.preview}`.trim();
+    if (!emailText) return;
+
+    setReplyLoading(true);
+    setError(null);
+    setReply("");
+
+    const tonePrompt = {
+      formal: "Write a formal professional reply.",
+      casual: "Write a casual friendly reply.",
+      professional: "Write a professional reply.",
+    }[replyTone];
+
+    const prompt = `${tonePrompt} Keep it concise (2-3 sentences). Reply to:\n\nSUBJECT: ${selectedEmail.subject}\n\nEMAIL:\n${emailText}`;
+
+    try {
+      const resp = await fetch("/api/ai-response", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: prompt }),
+      });
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok) {
+        setError(data?.error || "Failed to generate reply");
+        return;
+      }
+      const generatedReply = String(data?.text ?? data?.ai_response ?? data?.reply ?? "");
+      setReply(generatedReply);
+      setEditableReply(generatedReply);
+      setIsComposing(true);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setReplyLoading(false);
+    }
+  };
+
+  const sendEmail = async () => {
+    if (!selectedEmail || !editableReply.trim()) return;
+
+    setSendLoading(true);
+    setError(null);
+
+    try {
+      const resp = await fetch("/api/gmail/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: selectedEmail.sender.match(/[^\s<>]+@[^\s<>]+/)?.[0] || selectedEmail.sender,
+          subject: `Re: ${selectedEmail.subject}`,
+          body: editableReply,
+        }),
+      });
+
+      const data = await resp.json().catch(() => null);
+
+      if (!resp.ok) {
+        setError(data?.message || "Failed to send email");
+        return;
+      }
+
+      // Success!
+      setSummary("");
+      setWhySpam("");
+      setReply("");
+      setEditableReply("");
+      setIsComposing(false);
+      setError(null);
+      // Show success message (optional)
+      setTimeout(() => {
+        setSelectedEmail(null);
+        loadInbox(0); // Reload inbox
+      }, 1500);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSendLoading(false);
+    }
+  };
+
   return (
     <div className="h-screen flex bg-[#0b0b0b] text-gray-200 overflow-hidden">
 
       <div className="w-64 border-r border-gray-800 p-4 flex flex-col gap-4">
-        <div className="p-3 rounded-xl shadow-[0_0_20px_rgba(198,160,98,0.3)] flex items-center justify-between gap-2">
+        {/* Clean header with Back and Logout */}
+        <div className="flex items-center justify-between gap-2 p-3 rounded-xl border border-[#C6A062]/20 bg-black/40">
           <button
             onClick={onBack}
-            className="px-3 py-1 rounded-lg border border-[#C6A062]/40 text-[#C6A062] hover:bg-white/5 shrink-0"
+            className="px-3 py-1 rounded-lg border border-[#C6A062]/40 text-[#C6A062] hover:bg-white/5 text-sm"
           >
             ← Back
           </button>
-          <span className="text-center font-extrabold tracking-[0.2em] text-sm text-[#C6A062] truncate">
-            INBOX
-          </span>
           <button
             onClick={onLogout}
-            className="px-3 py-1 rounded-lg border border-[#C6A062]/40 text-[#C6A062] hover:bg-white/5 shrink-0"
+            className="px-3 py-1 rounded-lg border border-[#C6A062]/40 text-[#C6A062] hover:bg-white/5 text-sm"
           >
             Logout
           </button>
         </div>
+
+        {/* Search field */}
+        <input
+          type="text"
+          placeholder="Search emails..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full px-3 py-2 rounded-lg bg-black border border-gray-800 text-gray-200 text-sm placeholder-gray-600 focus:outline-none focus:border-[#C6A062]/50"
+        />
 
         {selectedEmail && isHighSpam && (
           <div className="p-4 rounded-xl border border-[#C6A062]/30 bg-black/60 space-y-3">
@@ -510,27 +630,30 @@ function Dashboard({ onBack, onLogout }: { onBack: () => void; onLogout: () => v
               <button
                 onClick={generateWhySpam}
                 disabled={whyLoading}
-                className="px-3 py-1 rounded-lg border border-[#C6A062]/40 text-[#C6A062] hover:bg-white/5 disabled:opacity-60"
+                className="px-2 py-1 rounded text-xs border border-[#C6A062]/40 text-[#C6A062] hover:bg-white/5 disabled:opacity-60"
               >
-                {whyLoading ? "Explaining..." : "Why Spam?"}
+                {whyLoading ? "..." : "Why?"}
               </button>
             </div>
-            <p className="text-xs text-gray-500">
-              Generates an explanation card on the right.
-            </p>
           </div>
         )}
       </div>
 
       <div className="flex-1 border-r border-gray-800 flex flex-col">
-        <div className="p-4 border-b border-gray-800 text-[#C6A062]">INBOX</div>
+        <div className="p-4 border-b border-gray-800 text-[#C6A062] font-bold">
+          INBOX ({filteredEmails.length})
+        </div>
 
         <div className="flex-1 overflow-y-auto">
-          {emails.map((email, i) => (
+          {filteredEmails.map((email, i) => (
             <div
               key={i}
               onClick={() => setSelectedEmail(email)}
-              className="p-4 border-b border-gray-800 cursor-pointer hover:bg-white/5"
+              className={`p-4 border-b border-gray-800 cursor-pointer hover:bg-white/5 transition ${
+                selectedEmail?.sender === email.sender && selectedEmail?.subject === email.subject
+                  ? "bg-white/10"
+                  : ""
+              }`}
             >
               <div className="flex justify-between">
                 <div className="flex items-center gap-2">
@@ -541,26 +664,36 @@ function Dashboard({ onBack, onLogout }: { onBack: () => void; onLogout: () => v
                           ? "border-red-500/60 text-red-300"
                           : "border-green-500/60 text-green-300"
                       }`}
-                      title={`Prediction: ${spamById[email.id]?.prediction} (confidence ${spamById[email.id]?.confidence})`}
+                      title={`Prediction: ${spamById[email.id]?.prediction}`}
                     >
                       {String(spamById[email.id]?.prediction || "").toLowerCase().includes("spam") ? "✗" : "✓"}
                     </span>
                   ) : (
-                    <span
-                      className="inline-flex items-center justify-center w-5 h-5 rounded border border-gray-700 text-gray-500 text-xs"
-                      title="Not analyzed yet"
-                    >
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded border border-gray-700 text-gray-500 text-xs">
                       …
                     </span>
                   )}
-                  <span>{email.sender}</span>
+                  <span className="text-sm truncate">{email.sender}</span>
                 </div>
                 <span className="text-xs text-gray-500">{email.time}</span>
               </div>
-              <div className="text-sm">{email.subject}</div>
-              <div className="text-xs text-gray-500">{email.preview}</div>
+              <div className="text-sm truncate">{email.subject}</div>
+              <div className="text-xs text-gray-500 truncate">{email.preview}</div>
             </div>
           ))}
+        </div>
+
+        {/* Load More button for pagination */}
+        <div className="p-4 border-t border-gray-800">
+          <button
+            onClick={() => {
+              setPageOffset((prev) => prev + 15);
+              loadInbox(pageOffset + 15);
+            }}
+            className="w-full px-4 py-2 rounded-lg border border-[#C6A062]/40 text-[#C6A062] hover:bg-white/5 text-sm transition"
+          >
+            Load More Emails
+          </button>
         </div>
       </div>
 
@@ -571,7 +704,7 @@ function Dashboard({ onBack, onLogout }: { onBack: () => void; onLogout: () => v
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="flex gap-3">
+            <div className="flex gap-2 flex-wrap">
               {isHighSpam && (
                 <button
                   onClick={async () => {
@@ -598,109 +731,138 @@ function Dashboard({ onBack, onLogout }: { onBack: () => void; onLogout: () => v
                       setLoading(false);
                     }
                   }}
-                  className="px-4 py-2 rounded-lg border border-[#C6A062]/40 text-[#C6A062] hover:bg-white/5"
+                  className="px-3 py-2 rounded text-sm border border-[#C6A062]/40 text-[#C6A062] hover:bg-white/5"
                 >
-                  Get Summary
+                  Summary
                 </button>
               )}
 
               <button
-                onClick={async () => {
-                  const input = `${selectedEmail.subject}\n\n${selectedEmail.preview}`.trim();
-                  if (!input) return;
-                  setLoading(true);
-                  setError(null);
-                  setReply("");
-                  try {
-                    const resp = await fetch("/api/ai-response", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ text: input }),
-                    });
-                    const data = await resp.json().catch(() => null);
-                    if (!resp.ok) {
-                      setError(data?.error || "Failed to generate response");
-                      return;
-                    }
-                    setReply(String(data?.text ?? data?.ai_response ?? data?.reply ?? ""));
-                  } catch (e: unknown) {
-                    setError(e instanceof Error ? e.message : String(e));
-                  } finally {
-                    setLoading(false);
-                  }
-                }}
-                className="px-4 py-2 rounded-lg border border-[#C6A062]/40 text-[#C6A062] hover:bg-white/5"
+                onClick={generateReply}
+                disabled={replyLoading}
+                className="px-3 py-2 rounded text-sm border border-[#C6A062]/40 text-[#C6A062] hover:bg-white/5 disabled:opacity-60"
               >
-                AI Response
+                {replyLoading ? "Generating..." : "AI Reply"}
               </button>
 
               {isHighSpam && (
                 <button
                   onClick={generateWhySpam}
                   disabled={whyLoading}
-                  className="px-4 py-2 rounded-lg border border-[#C6A062]/40 text-[#C6A062] hover:bg-white/5 disabled:opacity-60"
+                  className="px-3 py-2 rounded text-sm border border-[#C6A062]/40 text-[#C6A062] hover:bg-white/5 disabled:opacity-60"
                 >
-                  {whyLoading ? "Explaining..." : "Why Spam?"}
+                  {whyLoading ? "..." : "Why Spam?"}
                 </button>
               )}
             </div>
 
             {loading && (
-              <div className="p-4 rounded-xl border border-gray-800 bg-black/60 text-gray-400">
+              <div className="p-4 rounded-xl border border-gray-800 bg-black/60 text-gray-400 text-sm">
                 Loading analysis...
               </div>
             )}
 
             {error && (
-              <div className="p-4 rounded-xl border border-red-500/40 bg-black/60 text-red-200">
+              <div className="p-4 rounded-xl border border-red-500/40 bg-black/60 text-red-200 text-sm">
                 {error}
               </div>
             )}
 
             <div className="p-4 rounded-xl border border-[#C6A062]/30 bg-black/60">
-              <h3 className="text-[#C6A062] font-bold mb-2">SPAM TOKEN</h3>
+              <h3 className="text-[#C6A062] font-bold mb-2 text-sm">SPAM ANALYSIS</h3>
               {!spamData ? (
-                <p className="text-sm text-gray-400">—</p>
+                <p className="text-xs text-gray-400">—</p>
               ) : (
-                <div className="text-sm text-gray-400 space-y-1">
+                <div className="text-xs text-gray-400 space-y-1">
                   <p>Prediction: {spamData.prediction}</p>
-                  <p>Confidence: {spamData.confidence}</p>
+                  <p>Confidence: {(spamData.confidence * 100).toFixed(0)}%</p>
                   {typeof spamData.spam_probability === "number" && (
-                    <p>Spam probability: {spamData.spam_probability}</p>
-                  )}
-                  {typeof spamData.ham_probability === "number" && (
-                    <p>Ham probability: {spamData.ham_probability}</p>
+                    <p>Spam prob: {(spamData.spam_probability * 100).toFixed(0)}%</p>
                   )}
                 </div>
               )}
             </div>
 
-            {isHighSpam && (
+            {isHighSpam && summary && (
               <div className="p-4 rounded-xl border border-[#C6A062]/30 bg-black/60">
-                <h3 className="text-[#C6A062] font-bold mb-2">AI SUMMARY</h3>
-                <p className="text-xs text-gray-500 mb-2">Q: Summarize this email.</p>
-                <p className="text-sm text-gray-400 whitespace-pre-wrap min-h-20">
-                  {summary || "—"}
-                </p>
+                <h3 className="text-[#C6A062] font-bold mb-2 text-sm">SUMMARY</h3>
+                <p className="text-xs text-gray-400 whitespace-pre-wrap">{summary}</p>
               </div>
             )}
 
-            {isHighSpam && (
+            {isHighSpam && whySpam && (
               <div className="p-4 rounded-xl border border-[#C6A062]/30 bg-black/60">
-                <h3 className="text-[#C6A062] font-bold mb-2">WHY SPAM</h3>
-                <p className="text-xs text-gray-500 mb-2">Q: Why is this email likely spam?</p>
-                <p className="text-sm text-gray-400 whitespace-pre-wrap min-h-20">
-                  {whySpam || "—"}
-                </p>
+                <h3 className="text-[#C6A062] font-bold mb-2 text-sm">RED FLAGS</h3>
+                <p className="text-xs text-gray-400 whitespace-pre-wrap">{whySpam}</p>
               </div>
             )}
 
-            <div className="p-4 rounded-xl border border-[#C6A062]/30 bg-black/60">
-              <h3 className="text-[#C6A062] font-bold mb-2">AI RESPONSE</h3>
-              <p className="text-sm text-gray-400 whitespace-pre-wrap min-h-20">
-                {reply || "—"}
-              </p>
-            </div>
+            {isComposing ? (
+              <div className="p-4 rounded-xl border border-[#C6A062]/30 bg-black/60 space-y-3">
+                <h3 className="text-[#C6A062] font-bold text-sm">COMPOSE REPLY</h3>
+                
+                <div className="flex gap-2">
+                  {(["formal", "casual", "professional"] as const).map((tone) => (
+                    <button
+                      key={tone}
+                      onClick={() => setReplyTone(tone)}
+                      className={`px-2 py-1 rounded text-xs border transition ${
+                        replyTone === tone
+                          ? "border-[#C6A062] bg-[#C6A062]/20 text-[#C6A062]"
+                          : "border-gray-700 text-gray-400 hover:border-[#C6A062]/50"
+                      }`}
+                    >
+                      {tone}
+                    </button>
+                  ))}
+                </div>
+
+                <textarea
+                  value={editableReply}
+                  onChange={(e) => setEditableReply(e.target.value)}
+                  className="w-full p-3 rounded bg-black border border-gray-700 text-gray-200 text-xs focus:outline-none focus:border-[#C6A062]/50 min-h-24"
+                />
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      await generateReply();
+                    }}
+                    disabled={replyLoading}
+                    className="flex-1 px-3 py-2 rounded text-xs border border-[#C6A062]/40 text-[#C6A062] hover:bg-white/5 disabled:opacity-60"
+                  >
+                    {replyLoading ? "..." : "Regenerate"}
+                  </button>
+                  <button
+                    onClick={sendEmail}
+                    disabled={sendLoading || !editableReply.trim()}
+                    className="flex-1 px-3 py-2 rounded text-xs bg-[#C6A062] text-black font-semibold hover:opacity-90 disabled:opacity-60"
+                  >
+                    {sendLoading ? "Sending..." : "Send"}
+                  </button>
+                  <button
+                    onClick={() => setIsComposing(false)}
+                    className="flex-1 px-3 py-2 rounded text-xs border border-gray-700 text-gray-400 hover:border-gray-600"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : reply ? (
+              <div className="p-4 rounded-xl border border-[#C6A062]/30 bg-black/60">
+                <h3 className="text-[#C6A062] font-bold mb-2 text-sm">AI REPLY</h3>
+                <p className="text-xs text-gray-400 whitespace-pre-wrap mb-3">{reply}</p>
+                <button
+                  onClick={() => {
+                    setEditableReply(reply);
+                    setIsComposing(true);
+                  }}
+                  className="w-full px-3 py-2 rounded text-xs bg-[#C6A062] text-black font-semibold hover:opacity-90"
+                >
+                  Compose & Send
+                </button>
+              </div>
+            ) : null}
           </div>
         )}
       </div>

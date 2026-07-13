@@ -33,6 +33,8 @@ urlpatterns = [
     path("api/logout/", api_views.logout),
     path("api/gmail/inbox", api_views.gmail_inbox),
     path("api/gmail/inbox/", api_views.gmail_inbox),
+    path("api/gmail/send", api_views.send_email),
+    path("api/gmail/send/", api_views.send_email),
     path("api/predict", api_views.predict),
     path("api/predict/", api_views.predict),
     path("api/summary", api_views.summary),

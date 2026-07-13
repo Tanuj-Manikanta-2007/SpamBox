@@ -1,0 +1,118 @@
+/* SpamBox Theme - Shared across all pages */
+
+:root {
+    --primary-color: #C6A062;
+    --primary-light: #F5E6C8;
+    --bg-dark: #0b0b0b;
+    --bg-darker: #050505;
+    --text-light: #e0e0e0;
+    --text-muted: #d0d0d0;
+    --text-dim: #888;
+    --border-color: rgba(198, 160, 98, 0.2);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    max-width: 900px;
+    margin: auto;
+    padding: 40px 20px;
+    line-height: 1.8;
+    color: var(--text-light);
+    background-color: var(--bg-dark);
+    background-image: radial-gradient(circle at 20% 50%, rgba(198, 160, 98, 0.05) 0%, transparent 50%),
+                      radial-gradient(circle at 80% 80%, rgba(198, 160, 98, 0.03) 0%, transparent 50%);
+}
+
+h1 {
+    color: var(--primary-color);
+    font-size: 2.5em;
+    margin-bottom: 10px;
+    margin-top: 0;
+    text-shadow: 0 0 20px rgba(198, 160, 98, 0.3);
+    letter-spacing: 0.05em;
+}
+
+h2 {
+    color: var(--primary-color);
+    font-size: 1.5em;
+    margin-top: 30px;
+    margin-bottom: 15px;
+    border-left: 3px solid var(--primary-color);
+    padding-left: 12px;
+}
+
+p {
+    color: var(--text-muted);
+    margin-bottom: 15px;
+}
+
+ul, ol {
+    color: var(--text-muted);
+    margin-left: 20px;
+}
+
+li {
+    margin-bottom: 10px;
+    color: var(--text-muted);
+}
+
+strong {
+    color: var(--primary-color);
+}
+
+a {
+    color: var(--primary-color);
+    text-decoration: none;
+    border-bottom: 1px solid var(--primary-color);
+    transition: all 0.3s ease;
+}
+
+a:hover {
+    color: var(--primary-light);
+    border-bottom-color: var(--primary-light);
+}
+
+.last-updated {
+    color: var(--text-dim);
+    font-size: 0.9em;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.back-link {
+    display: inline-block;
+    margin-bottom: 30px;
+    color: var(--primary-color);
+    text-decoration: none;
+    font-size: 0.95em;
+    border-bottom: none;
+    transition: all 0.3s ease;
+}
+
+.back-link:hover {
+    color: var(--primary-light);
+    transform: translateX(-5px);
+}
+
+.container {
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 30px;
+    margin-top: 20px;
+}
+
+code {
+    background-color: rgba(198, 160, 98, 0.1);
+    color: var(--primary-light);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+}

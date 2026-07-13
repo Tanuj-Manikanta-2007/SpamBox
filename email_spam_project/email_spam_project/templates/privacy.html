@@ -1,28 +1,17 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Privacy Policy | SpamBox</title>
-<style>
-body{
-    font-family: Arial, Helvetica, sans-serif;
-    max-width:900px;
-    margin:auto;
-    padding:40px;
-    line-height:1.8;
-    color:#333;
-}
-h1,h2{
-    color:#1a73e8;
-}
-</style>
+<link rel="stylesheet" href="{% static 'css/spambox_theme.css' %}">
 </head>
 <body>
 
 <h1>Privacy Policy</h1>
 
-<p><strong>Last Updated:</strong> July 2026</p>
+<p class="last-updated"><strong>Last Updated:</strong> July 2026</p>
 
 <p>
 SpamBox ("we", "our", or "us") respects your privacy. This Privacy Policy explains
@@ -72,14 +61,23 @@ to trusted processing services, including:
 
 <ul>
 <li>Our Spam Classification service.</li>
-<li> Truysted third party AI service provide for email   summarization and reply generation.</li>
+<li>Trusted third-party AI services for email summarization and reply generation.</li>
 </ul>
 
 <p>
 These services process only the minimum information necessary to provide
- the requested functionality. We do not use your Gmail data for advertising,
-  marketing, user profiling, or any purpose unrelated to the services requested 
-  by the user.
+the requested functionality. We do not use your Gmail data for advertising,
+marketing, user profiling, or any purpose unrelated to the services requested
+by the user.
+</p>
+
+<h2>4.1 Email Sending</h2>
+
+<p>
+If you choose to send an AI-generated reply through SpamBox, we securely send
+the email through the Gmail API using your Google authorization token.
+Emails are sent only after you explicitly confirm the send action.
+You retain full control and responsibility over all sent emails.
 </p>
 
 <h2>5. Data Security</h2>
