@@ -63,6 +63,15 @@ def _clean_one_line(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").strip())
 
 
+def _extract_email_address(value: str | None) -> str:
+    if not value:
+        return ""
+    parsed = re.search(r"<([^>]+)>", value)
+    if parsed:
+        return parsed.group(1).strip()
+    return value.strip()
+
+
 def _maybe_generate_with_gemini(prompt: str) -> str | None:
     api_key = _gemini_api_key()
     if not api_key:
@@ -203,12 +212,20 @@ def gmail_inbox(request):
             )
 
             headers = {h.get("name"): h.get("value") for h in msg.get("payload", {}).get("headers", [])}
+            from_header = headers.get("From", "")
+            reply_to_header = headers.get("Reply-To", from_header)
+            message_id_header = headers.get("Message-ID") or headers.get("Message-Id", "")
             emails.append(
                 {
                     "id": msg_id,
+                    "threadId": msg.get("threadId", ""),
                     "sender": headers.get("From", ""),
+                    "senderEmail": _extract_email_address(from_header),
+                    "replyTo": reply_to_header,
+                    "replyToEmail": _extract_email_address(reply_to_header),
                     "subject": headers.get("Subject", ""),
                     "time": headers.get("Date", ""),
+                    "messageId": message_id_header,
                     "preview": msg.get("snippet", ""),
                 }
             )
@@ -344,9 +361,12 @@ def send_email(request):
         return _error("Not authenticated", status=401)
 
     payload = _read_json_body(request)
-    to_email = (payload.get("to") or "").strip()
+    to_email = (payload.get("to") or payload.get("replyTo") or "").strip()
     subject = (payload.get("subject") or "").strip()
     body = (payload.get("body") or payload.get("text") or payload.get("message") or "").strip()
+    thread_id = (payload.get("threadId") or "").strip()
+    in_reply_to = (payload.get("inReplyTo") or payload.get("messageId") or "").strip()
+    references = (payload.get("references") or "").strip()
 
     if not (to_email and subject and body):
         return _error("Missing 'to', 'subject', or 'body'", status=400)
@@ -398,10 +418,18 @@ def send_email(request):
         message = MIMEText(body, "plain")
         message["to"] = to_email
         message["subject"] = subject
+        if in_reply_to:
+            message["In-Reply-To"] = in_reply_to
+            if not references:
+                references = in_reply_to
+        if references:
+            message["References"] = references
 
         # Encode and send
         raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
         send_message = {"raw": raw_message}
+        if thread_id:
+            send_message["threadId"] = thread_id
 
         result = service.users().messages().send(userId="me", body=send_message).execute()
 
